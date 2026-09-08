@@ -127,7 +127,7 @@
       { id: "Ar", formula: "Ar", display: "Ar", atoms: { Ar: 1 }, cid: 23969, inchi: "InChI=1S/Ar", isNoble: true }
     ];
 
-    // Extended CPK Colors & Radii for Ball & Stick Icons
+    // CPK Colors & Radii for Ball & Stick Icons
     const CPK = {
       H:  { color: "#f0f9ff", radius: 7 },
       He: { color: "#a5f3fc", radius: 7.5 },
@@ -175,7 +175,6 @@
       let svgContent = "";
 
       if (atomList.length === 1) {
-        // Single Atom
         const el = atomList[0];
         const props = CPK[el] || { color: "#cbd5e1", radius: 10 };
         const r = props.radius * scale * 1.35;
@@ -185,7 +184,6 @@
           <text x="${center}" y="${center + 4 * scale}" font-size="${10 * scale}" font-weight="bold" fill="#0f172a" text-anchor="middle">${el}</text>
         `;
       } else if (atomList.length === 2) {
-        // Diatomic Molecule
         const e1 = atomList[0], e2 = atomList[1];
         const p1 = CPK[e1] || { color: "#cbd5e1", radius: 8.5 };
         const p2 = CPK[e2] || { color: "#cbd5e1", radius: 8.5 };
@@ -204,7 +202,6 @@
           <circle cx="${x2 - r2*0.25}" cy="${y2 - r2*0.25}" r="${r2*0.3}" fill="#ffffff" opacity="0.35"/>
         `;
       } else {
-        // Polyatomic Molecule
         const elements = Object.keys(atoms);
         const centralEl = elements.find(e => e !== 'H' && e !== 'F') || elements[0];
 
@@ -224,9 +221,9 @@
         let angles = [];
         if (numOuter === 2) {
           if (centralEl === 'C' || centralEl === 'Be') {
-            angles = [0, Math.PI]; // Linear (e.g. CO2)
+            angles = [0, Math.PI];
           } else {
-            angles = [Math.PI * 0.25, Math.PI * 0.75]; // Bent (e.g. H2O)
+            angles = [Math.PI * 0.25, Math.PI * 0.75];
           }
         } else {
           for (let i = 0; i < numOuter; i++) {
@@ -244,7 +241,7 @@
           bondsSVG += `<line x1="${center}" y1="${center}" x2="${ox}" y2="${oy}" stroke="#94a3b8" stroke-width="${3 * scale}" stroke-linecap="round"/>`;
           outerSpheresSVG += `
             <circle cx="${ox}" cy="${oy}" r="${rOuter}" fill="${pOuter.color}" stroke="#0f172a" stroke-width="1.2"/>
-            <circle cx="${ox - rOuter*0.25}" cy="${oy - rOuter*0.25}" r="${rOuter*0.3}" fill="#ffffff" opacity="0.35"/>
+            <circle cx="${ox - rOuter*0.25}" cy="${ox - rOuter*0.25}" r="${rOuter*0.3}" fill="#ffffff" opacity="0.35"/>
           `;
         });
 
@@ -375,7 +372,6 @@
       } else if (activeDrag.type === "canvas") {
         const droppedInst = activeDrag.instance;
 
-        // Dragged back to sidebar -> Remove species
         if (
           e.clientX >= sRect.left && e.clientX <= sRect.right &&
           e.clientY >= sRect.top && e.clientY <= sRect.bottom
@@ -477,6 +473,7 @@
       const overallGcd = counts.reduce((acc, val) => gcd(acc, val), counts[0]);
       const possibleFactors = getDivisors(overallGcd);
 
+      // Map keyed by InChI to strictly deduplicate chemical products
       const candidatesMap = new Map();
 
       for (const factor of possibleFactors) {
@@ -530,8 +527,9 @@
                 }
 
                 if (valid && productCount >= 1) {
-                  if (!candidatesMap.has(p.CID)) {
-                    candidatesMap.set(p.CID, {
+                  // Deduplicate options strictly using the InChI identifier
+                  if (!candidatesMap.has(p.InChI)) {
+                    candidatesMap.set(p.InChI, {
                       cid: p.CID,
                       formula: p.MolecularFormula,
                       display: toSubscript(p.MolecularFormula),
@@ -587,7 +585,6 @@
         executeReaction(candidates[0], itemsInBox);
         btn.disabled = false;
       } else {
-        // Prompt user to select from multiple stoichiometric reaction paths
         promptMultipleProducts(candidates, itemsInBox);
         btn.disabled = false;
       }
