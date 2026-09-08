@@ -3,15 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lingboms' Game</title>
-  <!-- Load RDKit.js Minimal WebAssembly Build -->
-  <script src="https://unpkg.com/@rdkit/rdkit/Code/MinimalLib/dist/RDKit_minimal.js"></script>
+  <title>Lingbom's Game - 3D Ball & Stick</title>
+  <!-- jQuery (Required by 3Dmol.js) -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <!-- 3Dmol.js WebGL Molecular Visualizer -->
+  <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+  <!-- OpenChemLib.js (OCL) for 100% Client-Side 3D Coordinate Generation -->
+  <script src="https://unpkg.com/openchemlib/dist/openchemlib-full.js"></script>
+  
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { display: flex; margin: 0; height: 100vh; background: #0f172a; color: #f8fafc; overflow: hidden; user-select: none; }
     
     /* Layout */
-    #sidebar { width: 280px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; z-index: 10; }
+    #sidebar { width: 290px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; z-index: 10; }
     #workspace { flex: 1; position: relative; background: #0f172a; overflow: hidden; }
 
     h2 { margin-top: 0; color: #38bdf8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
@@ -22,22 +27,22 @@
 
     /* Inventory Sidebar */
     .inventory-grid { display: flex; flex-wrap: wrap; gap: 8px; overflow-y: auto; flex: 1; align-content: flex-start; width: 100%; padding-right: 4px; }
-    .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 10px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 75px; flex: 1 1 calc(50% - 8px); text-align: center; transition: background 0.15s, border-color 0.15s; }
+    .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 80px; flex: 1 1 calc(50% - 8px); text-align: center; transition: background 0.15s, border-color 0.15s; }
     .card:hover { background: #475569; border-color: #38bdf8; }
-    .card .formula { font-weight: bold; font-size: 0.9rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
+    .card .formula { font-weight: bold; font-size: 0.85rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
 
-    /* RDKit SVG Containers */
-    .svg-container { display: flex; align-items: center; justify-content: center; pointer-events: none; background: #ffffff; border-radius: 6px; padding: 2px; }
-    .svg-container svg { max-width: 100%; max-height: 100%; }
-
+    /* 3D Model Containers */
+    .mol-container { position: relative; width: 68px; height: 68px; border-radius: 6px; overflow: hidden; background: #0f172a; pointer-events: none; }
+    
     /* Canvas Workspace Elements */
-    .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 8px 10px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; transition: border-color 0.15s, box-shadow 0.15s; }
+    .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 6px 8px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; transition: border-color 0.15s, box-shadow 0.15s; }
     .canvas-item:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
     .canvas-item.in-box { border-color: #a855f7; }
-    .canvas-item .formula { font-weight: bold; font-size: 0.95rem; color: #ffffff; margin-top: 4px; pointer-events: none; }
+    .canvas-item .formula { font-weight: bold; font-size: 0.9rem; color: #ffffff; margin-top: 4px; pointer-events: none; }
+    .canvas-item .mol-container { width: 85px; height: 85px; }
 
     /* Reaction Box Overlay */
-    #reaction-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; height: 300px; border: 2.5px dashed #a855f7; border-radius: 16px; background: rgba(168, 85, 247, 0.04); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px; pointer-events: none; box-shadow: inset 0 0 20px rgba(168, 85, 247, 0.08); }
+    #reaction-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 440px; height: 320px; border: 2.5px dashed #a855f7; border-radius: 16px; background: rgba(168, 85, 247, 0.04); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px; pointer-events: none; box-shadow: inset 0 0 20px rgba(168, 85, 247, 0.08); }
     .box-header { display: flex; width: 100%; justify-content: space-between; align-items: center; pointer-events: auto; }
     .box-title { color: #c084fc; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; }
     #react-btn { background: #9333ea; color: white; border: none; padding: 8px 22px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; pointer-events: auto; transition: background 0.2s, transform 0.1s; box-shadow: 0 2px 8px rgba(147, 51, 234, 0.4); }
@@ -47,19 +52,19 @@
     /* Drag Ghost */
     .drag-ghost { position: absolute; pointer-events: none; z-index: 1000; opacity: 0.9; transform: translate(-50%, -50%); }
 
-    /* Status Bar & Board Controls */
+    /* Status Bar & Controls */
     #status-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; padding: 12px 24px; border-radius: 20px; color: #38bdf8; font-weight: 500; font-size: 0.9rem; pointer-events: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 5; text-align: center; max-width: 80%; }
     #status-bar a { color: #38bdf8; font-weight: bold; text-decoration: underline; margin-left: 6px; }
     #clear-canvas-btn { position: absolute; top: 16px; right: 16px; background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; cursor: pointer; z-index: 5; }
     #clear-canvas-btn:hover { background: #dc2626; }
 
-    /* Multiple Product Choice Modal */
+    /* Modal */
     #choice-modal { display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
-    .modal-content { background: #1e293b; border: 1px solid #475569; border-radius: 16px; padding: 20px; width: 440px; max-width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .modal-content { background: #1e293b; border: 1px solid #475569; border-radius: 16px; padding: 20px; width: 460px; max-width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
     .modal-content h3 { color: #38bdf8; margin-top: 0; margin-bottom: 6px; font-size: 1.1rem; }
     .modal-content p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
-    .choice-grid { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
-    .choice-card { background: #334155; border: 1px solid #475569; border-radius: 10px; padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s, border-color 0.15s; }
+    .choice-grid { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
+    .choice-card { background: #334155; border: 1px solid #475569; border-radius: 10px; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s, border-color 0.15s; }
     .choice-card:hover { background: #475569; border-color: #38bdf8; }
     .choice-info { display: flex; flex-direction: column; align-items: flex-start; }
     .choice-title { font-weight: bold; color: #f8fafc; font-size: 0.95rem; }
@@ -70,6 +75,9 @@
   </style>
 </head>
 <body>
+
+  <!-- Hidden Offscreen Container for WebGL Snapshot Generation -->
+  <div id="snapshot-stage" style="position: absolute; left: -9999px; top: -9999px; width: 150px; height: 150px;"></div>
 
   <!-- Sidebar: Inventory -->
   <div id="sidebar">
@@ -93,7 +101,7 @@
       </div>
     </div>
 
-    <div id="status-bar">Initializing RDKit chem engine...</div>
+    <div id="status-bar">3D Engine initialized with WebGL & OCL 3D coordinate embedder.</div>
 
     <!-- Choice Selection Modal for Multiple Products -->
     <div id="choice-modal">
@@ -106,15 +114,9 @@
   </div>
 
   <script>
-    let RDKitModule = null;
-
-    // Base Elements with SMILES & InChI representations
     const BASE_ELEMENTS = [
-      // Period 1
       { id: "H2", formula: "H2", display: "H₂", atoms: { H: 2 }, cid: 783, smiles: "[H][H]", inchi: "InChI=1S/H2/h1H" },
       { id: "He", formula: "He", display: "He", atoms: { He: 1 }, cid: 23963, smiles: "[He]", inchi: "InChI=1S/He", isNoble: true },
-      
-      // Period 2
       { id: "Li", formula: "Li", display: "Li", atoms: { Li: 1 }, cid: 23993, smiles: "[Li]", inchi: "InChI=1S/Li", isMetal: true },
       { id: "Be", formula: "Be", display: "Be", atoms: { Be: 1 }, cid: 5460467, smiles: "[Be]", inchi: "InChI=1S/Be", isMetal: true },
       { id: "B", formula: "B", display: "B", atoms: { B: 1 }, cid: 5462311, smiles: "[B]", inchi: "InChI=1S/B" },
@@ -123,8 +125,6 @@
       { id: "O2", formula: "O2", display: "O₂", atoms: { O: 2 }, cid: 977, smiles: "O=O", inchi: "InChI=1S/O2/c1-2" },
       { id: "F2", formula: "F2", display: "F₂", atoms: { F: 2 }, cid: 24524, smiles: "FF", inchi: "InChI=1S/F2/c1-2" },
       { id: "Ne", formula: "Ne", display: "Ne", atoms: { Ne: 1 }, cid: 23968, smiles: "[Ne]", inchi: "InChI=1S/Ne", isNoble: true },
-
-      // Period 3
       { id: "Na", formula: "Na", display: "Na", atoms: { Na: 1 }, cid: 5360545, smiles: "[Na]", inchi: "InChI=1S/Na", isMetal: true },
       { id: "Mg", formula: "Mg", display: "Mg", atoms: { Mg: 1 }, cid: 5462224, smiles: "[Mg]", inchi: "InChI=1S/Mg", isMetal: true },
       { id: "Al", formula: "Al", display: "Al", atoms: { Al: 1 }, cid: 5359268, smiles: "[Al]", inchi: "InChI=1S/Al", isMetal: true },
@@ -140,53 +140,100 @@
     let instanceIdCounter = 0;
     let activeDrag = null;
     let searchQuery = "";
-
-    // Initialize RDKit WASM Engine
-    window.initRDKitModule().then((RDKit) => {
-      RDKitModule = RDKit;
-      document.getElementById("status-bar").innerText = "Place elements inside the Reaction Box and press React.";
-      renderInventory();
-    }).catch(() => {
-      document.getElementById("status-bar").innerText = "Failed to initialize RDKit Engine.";
-    });
+    const thumbnailCache = new Map();
 
     function toSubscript(str) {
       const map = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
       return str.replace(/\d/g, m => map[m]);
     }
 
-    // Helper to generate canonical structure identifier for strict deduplication
-    function getStructureKey(item) {
-      if (item.inchi && item.inchi.trim() !== "") return item.inchi.trim();
-      if (item.smiles && item.smiles.trim() !== "") return item.smiles.trim();
-      return item.formula;
+    // OCL Canonical SMILES for deduplication
+    function getCanonicalSmiles(item) {
+      if (!item) return "";
+      if (window.OCL) {
+        try {
+          let mol = null;
+          if (item.smiles) mol = OCL.Molecule.fromSmiles(item.smiles);
+          if (!mol && item.inchi) mol = OCL.Molecule.fromInChI(item.inchi);
+          if (mol) return mol.getCanonizedSMILES();
+        } catch (e) {}
+      }
+      return (item.inchi || item.smiles || item.formula).trim();
     }
 
-    // Client-side SVG generation via RDKit WebAssembly
-    function getRDKitSVG(item, width = 50, height = 50) {
-      if (!RDKitModule) return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;"><span class="loader"></span></div>`;
+    // 3D Geometry generation via Cactus API with client-side OCL fallback
+    async function get3DStructureData(item) {
+      const query = item.smiles || item.inchi || item.formula;
       
-      let mol = null;
-      if (item.smiles) mol = RDKitModule.get_mol(item.smiles);
-      if (!mol && item.inchi) mol = RDKitModule.get_mol(item.inchi);
+      // Try Cactus NIH API for precalculated 3D conformers
+      try {
+        const res = await fetch(`https://cactus.nci.nih.gov/chemical/structure/${encodeURIComponent(query)}/file?format=sdf&get3d=true`);
+        if (res.ok) {
+          const sdf = await res.text();
+          if (sdf && sdf.trim().length > 0 && !sdf.includes("Page Not Found") && !sdf.includes("HTML")) {
+            return { format: 'sdf', data: sdf };
+          }
+        }
+      } catch (e) {}
 
-      if (!mol) {
-        return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e293b;">${item.display || item.formula}</div>`;
+      // Fallback: Generate 3D coordinates locally using OpenChemLib (OCL)
+      if (window.OCL) {
+        try {
+          let mol = null;
+          if (item.smiles) mol = OCL.Molecule.fromSmiles(item.smiles);
+          if (!mol && item.inchi) mol = OCL.Molecule.fromInChI(item.inchi);
+          if (mol) {
+            mol.generate3DCoordinates();
+            const molfile = mol.toMolfile3D();
+            return { format: 'mol', data: molfile };
+          }
+        } catch (e) {}
+      }
+      return null;
+    }
+
+    // Render 3D Ball-and-Stick Model onto a DOM Element using 3Dmol.js
+    async function mount3DmolViewer(containerEl, item) {
+      containerEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;"><span class="loader"></span></div>`;
+      
+      const geom = await get3DStructureData(item);
+      containerEl.innerHTML = "";
+
+      if (!geom) {
+        containerEl.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-weight:bold;color:#38bdf8;">${item.display || item.formula}</div>`;
+        return null;
       }
 
-      const drawDetails = JSON.stringify({
-        width: width,
-        height: height,
-        clearBackground: true
-      });
-
-      const svg = mol.get_svg_with_highlights(drawDetails);
-      mol.delete();
-
-      return `<div class="svg-container" style="width:${width}px;height:${height}px;">${svg}</div>`;
+      const viewer = $3Dmol.createViewer(containerEl, { backgroundColor: '#0f172a' });
+      viewer.addModel(geom.data, geom.format);
+      
+      // Ball & Stick style: stick radius 0.15, sphere scale 0.28
+      viewer.setStyle({}, { stick: { radius: 0.15, colorscheme: 'Jmol' }, sphere: { scale: 0.28, colorscheme: 'Jmol' } });
+      viewer.zoomTo();
+      viewer.render();
+      return viewer;
     }
 
-    function renderInventory() {
+    // Bake 3D models into lightweight static thumbnail images to keep WebGL context usage optimized
+    async function get3DThumbnailURL(item) {
+      const key = getCanonicalSmiles(item);
+      if (thumbnailCache.has(key)) return thumbnailCache.get(key);
+
+      const stage = document.getElementById("snapshot-stage");
+      stage.innerHTML = "";
+      const viewer = await mount3DmolViewer(stage, item);
+
+      let dataUrl = "";
+      if (viewer) {
+        dataUrl = viewer.png();
+        stage.innerHTML = "";
+      }
+
+      thumbnailCache.set(key, dataUrl);
+      return dataUrl;
+    }
+
+    async function renderInventory() {
       const grid = document.getElementById("inventory");
       grid.innerHTML = "";
 
@@ -197,16 +244,20 @@
                (item.display && item.display.toLowerCase().includes(query));
       });
 
-      filtered.forEach(item => {
+      for (const item of filtered) {
         const card = document.createElement("div");
         card.className = "card";
+        const thumbUrl = await get3DThumbnailURL(item);
+
         card.innerHTML = `
-          ${getRDKitSVG(item, 50, 50)}
+          <div class="mol-container">
+            ${thumbUrl ? `<img src="${thumbUrl}" style="width:100%;height:100%;object-fit:contain;" />` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-weight:bold;">${item.display}</div>`}
+          </div>
           <span class="formula">${item.display || toSubscript(item.formula)}</span>
         `;
-        card.onpointerdown = (e) => startSidebarDrag(e, item);
+        card.onpointerdown = (e) => startSidebarDrag(e, item, thumbUrl);
         grid.appendChild(card);
-      });
+      }
       document.getElementById("count").innerText = inventory.length;
     }
 
@@ -216,17 +267,19 @@
     }
 
     // Drag and Drop Mechanics
-    function startSidebarDrag(e, item) {
+    function startSidebarDrag(e, item, thumbUrl) {
       e.preventDefault();
       const ghost = document.createElement("div");
       ghost.className = "canvas-item drag-ghost";
       ghost.innerHTML = `
-        ${getRDKitSVG(item, 54, 54)}
+        <div class="mol-container">
+          ${thumbUrl ? `<img src="${thumbUrl}" style="width:100%;height:100%;object-fit:contain;" />` : `<div>${item.display}</div>`}
+        </div>
         <span class="formula">${item.display || toSubscript(item.formula)}</span>
       `;
       document.body.appendChild(ghost);
 
-      activeDrag = { type: "sidebar", item: item, ghost: ghost };
+      activeDrag = { type: "sidebar", item, ghost };
       moveGhost(e);
 
       window.addEventListener("pointermove", onPointerMove);
@@ -240,7 +293,7 @@
       const rect = instance.el.getBoundingClientRect();
       activeDrag = {
         type: "canvas",
-        instance: instance,
+        instance,
         offsetX: e.clientX - rect.left,
         offsetY: e.clientY - rect.top,
       };
@@ -295,8 +348,8 @@
           e.clientX >= wRect.left && e.clientX <= wRect.right &&
           e.clientY >= wRect.top && e.clientY <= wRect.bottom
         ) {
-          const x = e.clientX - wRect.left - 35;
-          const y = e.clientY - wRect.top - 35;
+          const x = e.clientX - wRect.left - 45;
+          const y = e.clientY - wRect.top - 45;
           spawnCanvasItem(activeDrag.item, x, y);
         }
       } else if (activeDrag.type === "canvas") {
@@ -322,16 +375,25 @@
       el.className = "canvas-item";
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
-      el.innerHTML = `
-        ${getRDKitSVG(item, 52, 52)}
-        <span class="formula">${item.display || toSubscript(item.formula)}</span>
-      `;
+
+      const molContainer = document.createElement("div");
+      molContainer.className = "mol-container";
+      
+      const label = document.createElement("span");
+      label.className = "formula";
+      label.innerText = item.display || toSubscript(item.formula);
+
+      el.appendChild(molContainer);
+      el.appendChild(label);
 
       const inst = { id: instId, item, x, y, el };
       el.onpointerdown = (e) => startCanvasDrag(e, inst);
 
       document.getElementById("workspace").appendChild(el);
       canvasInstances.push(inst);
+
+      // Mount full 3Dmol.js WebGL model on workspace items
+      mount3DmolViewer(molContainer, item);
       updateBoxVisualState();
       return inst;
     }
@@ -349,7 +411,6 @@
       document.getElementById("status-bar").innerText = "Board cleared.";
     }
 
-    // Reaction Box Detection
     function getItemsInBox() {
       const box = document.getElementById("reaction-box");
       const bRect = box.getBoundingClientRect();
@@ -376,7 +437,6 @@
       });
     }
 
-    // Chemical Formula Parsing & Reaction Logic
     function parseFormulaToAtoms(formula) {
       const atoms = {};
       const matches = formula.matchAll(/([A-Z][a-z]?)(\d*)/g);
@@ -398,13 +458,23 @@
       return divs;
     }
 
+    async function hasSpectralData(cid) {
+      try {
+        const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON`);
+        if (!res.ok) return false;
+        const text = await res.text();
+        return /spectr/i.test(text);
+      } catch (e) {
+        return false;
+      }
+    }
+
     async function fetchPubChemCandidates(boxAtoms) {
       const counts = Object.values(boxAtoms);
       const overallGcd = counts.reduce((acc, val) => gcd(acc, val), counts[0]);
       const possibleFactors = getDivisors(overallGcd);
 
-      // Unique map keyed strictly by structural InChI/SMILES
-      const candidatesMap = new Map();
+      const rawCandidatesMap = new Map();
 
       for (const factor of possibleFactors) {
         const targetAtoms = {};
@@ -430,7 +500,8 @@
             const data = await res.json();
             if (data.PropertyTable && data.PropertyTable.Properties) {
               data.PropertyTable.Properties.forEach(p => {
-                if (p.Charge !== 0 || (!p.InChI && !p.CanonicalSMILES)) return;
+                if (p.Charge !== 0) return;
+                if (!p.InChI || !p.CanonicalSMILES || p.InChI.trim() === "" || p.CanonicalSMILES.trim() === "") return;
 
                 const pAtoms = parseFormulaToAtoms(p.MolecularFormula);
                 const totalAtoms = Object.values(pAtoms).reduce((s, n) => s + n, 0);
@@ -440,7 +511,6 @@
                   if (symbol !== "He" && symbol !== "Ne" && symbol !== "Ar") return;
                 }
 
-                // Verify exact stoichiometric match with box atoms
                 let valid = true;
                 let productCount = null;
                 for (let el in boxAtoms) {
@@ -457,22 +527,21 @@
                 }
 
                 if (valid && productCount >= 1) {
-                  const itemCandidate = {
+                  const candObj = {
                     cid: p.CID,
                     formula: p.MolecularFormula,
                     display: toSubscript(p.MolecularFormula),
                     title: p.Title || p.IUPACName || p.MolecularFormula,
                     atoms: pAtoms,
-                    inchi: p.InChI ? p.InChI.trim() : "",
-                    smiles: p.CanonicalSMILES ? p.CanonicalSMILES.trim() : "",
+                    inchi: p.InChI.trim(),
+                    smiles: p.CanonicalSMILES.trim(),
                     productCount: productCount
                   };
 
-                  const uniqueKey = getStructureKey(itemCandidate);
+                  const canonicalKey = getCanonicalSmiles(candObj);
 
-                  // Strict deduplication: keep only one candidate per chemical structure
-                  if (!candidatesMap.has(uniqueKey)) {
-                    candidatesMap.set(uniqueKey, itemCandidate);
+                  if (!rawCandidatesMap.has(canonicalKey)) {
+                    rawCandidatesMap.set(canonicalKey, candObj);
                   }
                 }
               });
@@ -481,7 +550,16 @@
         } catch (e) {}
       }
 
-      return Array.from(candidatesMap.values());
+      const rawCandidates = Array.from(rawCandidatesMap.values());
+
+      const spectralCheckResults = await Promise.all(
+        rawCandidates.map(async (cand) => {
+          const valid = await hasSpectralData(cand.cid);
+          return valid ? cand : null;
+        })
+      );
+
+      return spectralCheckResults.filter(cand => cand !== null);
     }
 
     async function triggerBoxReaction() {
@@ -495,7 +573,7 @@
       }
 
       btn.disabled = true;
-      statusEl.innerHTML = `<span class="loader"></span> Calculating reaction paths...`;
+      statusEl.innerHTML = `<span class="loader"></span> Calculating 3D reaction paths...`;
 
       const containsNoble = itemsInBox.some(i => i.item.isNoble);
       if (containsNoble && itemsInBox.length > 1) {
@@ -525,18 +603,21 @@
       }
     }
 
-    function promptMultipleProducts(candidates, itemsInBox) {
+    async function promptMultipleProducts(candidates, itemsInBox) {
       const modal = document.getElementById("choice-modal");
       const grid = document.getElementById("choice-grid");
       grid.innerHTML = "";
 
-      candidates.forEach(cand => {
+      for (const cand of candidates) {
         const card = document.createElement("div");
         card.className = "choice-card";
-        // Show ONLY the pure chemical species without stoichiometry multipliers
+        const thumbUrl = await get3DThumbnailURL(cand);
+
         card.innerHTML = `
           <div style="display:flex; align-items:center; gap: 12px;">
-            ${getRDKitSVG(cand, 44, 44)}
+            <div class="mol-container" style="width:48px;height:48px;">
+              ${thumbUrl ? `<img src="${thumbUrl}" style="width:100%;height:100%;object-fit:contain;" />` : `<div>${cand.display}</div>`}
+            </div>
             <div class="choice-info">
               <span class="choice-title">${cand.display}</span>
               <span class="choice-sub">${cand.title}</span>
@@ -549,16 +630,15 @@
           executeReaction(cand, itemsInBox);
         };
         grid.appendChild(card);
-      });
+      }
 
       modal.style.display = "flex";
     }
 
     function executeReaction(selectedCandidate, itemsInBox) {
-      const candidateKey = getStructureKey(selectedCandidate);
+      const candidateKey = getCanonicalSmiles(selectedCandidate);
       
-      // Check inventory using InChI/SMILES unique key
-      let productItem = inventory.find(i => getStructureKey(i) === candidateKey);
+      let productItem = inventory.find(i => getCanonicalSmiles(i) === candidateKey);
 
       if (!productItem) {
         productItem = {
@@ -580,7 +660,6 @@
 
       itemsInBox.forEach(inst => removeCanvasItem(inst));
 
-      // Show stoichiometry ONLY when placing multiple copies into the reaction box board
       const count = selectedCandidate.productCount;
       for (let i = 0; i < count; i++) {
         const spawnX = (bRect.left - wRect.left) + 40 + (i * 70) % (bRect.width - 80);
@@ -596,7 +675,6 @@
       `;
     }
 
-    // Initial Inventory Render
     renderInventory();
   </script>
 </body>
