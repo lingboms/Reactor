@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lingbom's Game</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { display: flex; margin: 0; height: 100vh; background: #0f172a; color: #f8fafc; overflow: hidden; user-select: none; }
+    
+    /* Layout */
+    #sidebar { width: 280px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; z-index: 10; }
+    #workspace { flex: 1; position: relative; background: #0f172a; overflow: hidden; }
+
+    h2 { margin-top: 0; color: #38bdf8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    
+    /* Search Bar */
+    #search-box { width: 100%; background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 8px 12px; color: #f8fafc; font-size: 0.85rem; margin-bottom: 12px; outline: none; transition: border-color 0.15s; }
+    #search-box:focus { border-color: #38bdf8; }
+
+    /* Inventory Sidebar */
+    .inventory-grid { display: flex; flex-wrap: wrap; gap: 8px; overflow-y: auto; flex: 1; align-content: flex-start; width: 100%; padding-right: 4px; }
+    .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 10px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 75px; flex: 1 1 calc(50% - 8px); text-align: center; transition: background 0.15s, border-color 0.15s; }
+    .card:hover { background: #475569; border-color: #38bdf8; }
+    .card .formula { font-weight: bold; font-size: 0.9rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
+
+    /* Canvas Workspace Elements */
+    .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 8px 10px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; transition: border-color 0.15s, box-shadow 0.15s; }
+    .canvas-item:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
+    .canvas-item.in-box { border-color: #a855f7; }
+    .canvas-item .formula { font-weight: bold; font-size: 0.95rem; color: #ffffff; margin-top: 2px; pointer-events: none; }
+
+    /* Reaction Box Overlay */
+    #reaction-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; height: 300px; border: 2.5px dashed #a855f7; border-radius: 16px; background: rgba(168, 85, 247, 0.04); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px; pointer-events: none; box-shadow: inset 0 0 20px rgba(168, 85, 247, 0.08); }
+    .box-header { display: flex; width: 100%; justify-content: space-between; align-items: center; pointer-events: auto; }
+    .box-title { color: #c084fc; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; }
+    #react-btn { background: #9333ea; color: white; border: none; padding: 8px 22px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; pointer-events: auto; transition: background 0.2s, transform 0.1s; box-shadow: 0 2px 8px rgba(147, 51, 234, 0.4); }
+    #react-btn:hover { background: #7e22ce; transform: scale(1.03); }
+    #react-btn:disabled { background: #475569; cursor: not-allowed; box-shadow: none; }
+
+    /* Drag Ghost */
+    .drag-ghost { position: absolute; pointer-events: none; z-index: 1000; opacity: 0.9; transform: translate(-50%, -50%); }
+
+    /* Status Bar & Board Controls */
+    #status-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; padding: 12px 24px; border-radius: 20px; color: #38bdf8; font-weight: 500; font-size: 0.9rem; pointer-events: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 5; text-align: center; max-width: 80%; }
+    #status-bar a { color: #38bdf8; font-weight: bold; text-decoration: underline; margin-left: 6px; }
+    #clear-canvas-btn { position: absolute; top: 16px; right: 16px; background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; cursor: pointer; z-index: 5; }
+    #clear-canvas-btn:hover { background: #dc2626; }
+
+    /* Multiple Product Choice Modal */
+    #choice-modal { display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+    .modal-content { background: #1e293b; border: 1px solid #475569; border-radius: 16px; padding: 20px; width: 440px; max-width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .modal-content h3 { color: #38bdf8; margin-top: 0; margin-bottom: 6px; font-size: 1.1rem; }
+    .modal-content p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+    .choice-grid { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+    .choice-card { background: #334155; border: 1px solid #475569; border-radius: 10px; padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s, border-color 0.15s; }
+    .choice-card:hover { background: #475569; border-color: #38bdf8; }
+    .choice-info { display: flex; flex-direction: column; align-items: flex-start; }
+    .choice-title { font-weight: bold; color: #f8fafc; font-size: 0.95rem; }
+    .choice-sub { font-size: 0.78rem; color: #94a3b8; }
+
+    .loader { border: 2.5px solid #334155; border-top: 2.5px solid #38bdf8; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar: Inventory -->
+  <div id="sidebar">
+    <h2>Lingbom's Game</h2>
+    <p style="font-size: 0.72rem; color: #94a3b8; margin-top: -4px; margin-bottom: 10px;">
+      Inventory (<span id="count">0</span>) • Drag to board or back to remove.
+    </p>
+    <input type="text" id="search-box" placeholder="Search species..." oninput="filterInventory()">
+    <div class="inventory-grid" id="inventory"></div>
+  </div>
+
+  <!-- Workspace Canvas -->
+  <div id="workspace">
+    <button id="clear-canvas-btn" onclick="clearCanvas()">Clear Board</button>
+
+    <!-- Reaction Box Overlay -->
+    <div id="reaction-box">
+      <div class="box-header">
+        <span class="box-title">⚡ Reaction Box</span>
+        <button id="react-btn" onclick="triggerBoxReaction()">React</button>
+      </div>
+    </div>
+
+    <div id="status-bar">Place elements inside the Reaction Box and press React.</div>
+
+    <!-- Choice Selection Modal for Multiple Products -->
+    <div id="choice-modal">
+      <div class="modal-content">
+        <h3>Multiple Reaction Paths</h3>
+        <p>Choose which product path to form from reactants:</p>
+        <div class="choice-grid" id="choice-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Period 1, 2 & 3 Main Group Elements
+    const BASE_ELEMENTS = [
+      // Period 1
+      { id: "H2", formula: "H2", display: "H₂", atoms: { H: 2 }, cid: 783, inchi: "InChI=1S/H2/h1H" },
+      { id: "He", formula: "He", display: "He", atoms: { He: 1 }, cid: 23963, inchi: "InChI=1S/He", isNoble: true },
+      
+      // Period 2
+      { id: "Li", formula: "Li", display: "Li", atoms: { Li: 1 }, cid: 23993, inchi: "InChI=1S/Li", isMetal: true },
+      { id: "Be", formula: "Be", display: "Be", atoms: { Be: 1 }, cid: 5460467, inchi: "InChI=1S/Be", isMetal: true },
+      { id: "B", formula: "B", display: "B", atoms: { B: 1 }, cid: 5462311, inchi: "InChI=1S/B" },
+      { id: "C", formula: "C", display: "C", atoms: { C: 1 }, cid: 5462310, inchi: "InChI=1S/C" },
+      { id: "N2", formula: "N2", display: "N₂", atoms: { N: 2 }, cid: 977, inchi: "InChI=1S/N2/c1-2" },
+      { id: "O2", formula: "O2", display: "O₂", atoms: { O: 2 }, cid: 977, inchi: "InChI=1S/O2/c1-2" },
+      { id: "F2", formula: "F2", display: "F₂", atoms: { F: 2 }, cid: 24524, inchi: "InChI=1S/F2/c1-2" },
+      { id: "Ne", formula: "Ne", display: "Ne", atoms: { Ne: 1 }, cid: 23968, inchi: "InChI=1S/Ne", isNoble: true },
+
+      // Period 3
+      { id: "Na", formula: "Na", display: "Na", atoms: { Na: 1 }, cid: 5360545, inchi: "InChI=1S/Na", isMetal: true },
+      { id: "Mg", formula: "Mg", display: "Mg", atoms: { Mg: 1 }, cid: 5462224, inchi: "InChI=1S/Mg", isMetal: true },
+      { id: "Al", formula: "Al", display: "Al", atoms: { Al: 1 }, cid: 5359268, inchi: "InChI=1S/Al", isMetal: true },
+      { id: "Si", formula: "Si", display: "Si", atoms: { Si: 1 }, cid: 5461123, inchi: "InChI=1S/Si" },
+      { id: "P4", formula: "P4", display: "P₄", atoms: { P: 4 }, cid: 123286, inchi: "InChI=1S/P4/c1-2-3(1)4(1)2" },
+      { id: "S8", formula: "S8", display: "S₈", atoms: { S: 8 }, cid: 6680, inchi: "InChI=1S/S8/c1-2-4-6-8-7-5-3-1" },
+      { id: "Cl2", formula: "Cl2", display: "Cl₂", atoms: { Cl: 2 }, cid: 24526, inchi: "InChI=1S/Cl2/c1-2" },
+      { id: "Ar", formula: "Ar", display: "Ar", atoms: { Ar: 1 }, cid: 23969, inchi: "InChI=1S/Ar", isNoble: true }
+    ];
+
+    // Extended CPK Colors & Radii for Ball & Stick Icons
+    const CPK = {
+      H:  { color: "#f0f9ff", radius: 7 },
+      He: { color: "#a5f3fc", radius: 7.5 },
+      Li: { color: "#c084fc", radius: 11 },
+      Be: { color: "#22c55e", radius: 10 },
+      B:  { color: "#f472b6", radius: 9.5 },
+      C:  { color: "#64748b", radius: 9.5 },
+      N:  { color: "#3b82f6", radius: 9 },
+      O:  { color: "#ef4444", radius: 9 },
+      F:  { color: "#10b981", radius: 8.5 },
+      Ne: { color: "#2dd4bf", radius: 8 },
+      Na: { color: "#a855f7", radius: 11 },
+      Mg: { color: "#16a34a", radius: 11 },
+      Al: { color: "#94a3b8", radius: 10 },
+      Si: { color: "#f59e0b", radius: 10 },
+      P:  { color: "#f97316", radius: 9.5 },
+      S:  { color: "#eab308", radius: 9.5 },
+      Cl: { color: "#22c55e", radius: 9 },
+      Ar: { color: "#06b6d4", radius: 8 }
+    };
+
+    let inventory = [...BASE_ELEMENTS];
+    let canvasInstances = [];
+    let instanceIdCounter = 0;
+    let activeDrag = null;
+    let searchQuery = "";
+
+    function toSubscript(str) {
+      const map = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
+      return str.replace(/\d/g, m => map[m]);
+    }
+
+    // Dynamic Ball & Stick SVG Generator
+    function generateBallAndStickSVG(item, size = 56) {
+      if (!item || !item.atoms) return '';
+
+      const atoms = item.atoms;
+      let atomList = [];
+      for (let el in atoms) {
+        for (let i = 0; i < atoms[el]; i++) atomList.push(el);
+      }
+
+      const center = size / 2;
+      const scale = size / 56;
+      let svgContent = "";
+
+      if (atomList.length === 1) {
+        // Single Atom
+        const el = atomList[0];
+        const props = CPK[el] || { color: "#cbd5e1", radius: 10 };
+        const r = props.radius * scale * 1.35;
+        svgContent = `
+          <circle cx="${center}" cy="${center}" r="${r}" fill="${props.color}" stroke="#0f172a" stroke-width="1.5"/>
+          <circle cx="${center - r*0.3}" cy="${center - r*0.3}" r="${r*0.3}" fill="#ffffff" opacity="0.4"/>
+          <text x="${center}" y="${center + 4 * scale}" font-size="${10 * scale}" font-weight="bold" fill="#0f172a" text-anchor="middle">${el}</text>
+        `;
+      } else if (atomList.length === 2) {
+        // Diatomic Molecule
+        const e1 = atomList[0], e2 = atomList[1];
+        const p1 = CPK[e1] || { color: "#cbd5e1", radius: 8.5 };
+        const p2 = CPK[e2] || { color: "#cbd5e1", radius: 8.5 };
+
+        const dist = 13 * scale;
+        const x1 = center - dist, y1 = center;
+        const x2 = center + dist, y2 = center;
+        const r1 = p1.radius * scale;
+        const r2 = p2.radius * scale;
+
+        svgContent = `
+          <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#94a3b8" stroke-width="${3.5 * scale}" stroke-linecap="round"/>
+          <circle cx="${x1}" cy="${y1}" r="${r1}" fill="${p1.color}" stroke="#0f172a" stroke-width="1.2"/>
+          <circle cx="${x1 - r1*0.25}" cy="${y1 - r1*0.25}" r="${r1*0.3}" fill="#ffffff" opacity="0.35"/>
+          <circle cx="${x2}" cy="${y2}" r="${r2}" fill="${p2.color}" stroke="#0f172a" stroke-width="1.2"/>
+          <circle cx="${x2 - r2*0.25}" cy="${y2 - r2*0.25}" r="${r2*0.3}" fill="#ffffff" opacity="0.35"/>
+        `;
+      } else {
+        // Polyatomic Molecule
+        const elements = Object.keys(atoms);
+        const centralEl = elements.find(e => e !== 'H' && e !== 'F') || elements[0];
+
+        let outerAtoms = [...atomList];
+        const cIdx = outerAtoms.indexOf(centralEl);
+        if (cIdx >= 0) outerAtoms.splice(cIdx, 1);
+
+        const pCentral = CPK[centralEl] || { color: "#cbd5e1", radius: 9.5 };
+        const rCentral = pCentral.radius * scale;
+
+        let bondsSVG = "";
+        let outerSpheresSVG = "";
+
+        const numOuter = outerAtoms.length;
+        const radiusDist = Math.min(17 * scale, size * 0.34);
+
+        let angles = [];
+        if (numOuter === 2) {
+          if (centralEl === 'C' || centralEl === 'Be') {
+            angles = [0, Math.PI]; // Linear (e.g. CO2)
+          } else {
+            angles = [Math.PI * 0.25, Math.PI * 0.75]; // Bent (e.g. H2O)
+          }
+        } else {
+          for (let i = 0; i < numOuter; i++) {
+            angles.push((i * (2 * Math.PI / numOuter)) - (Math.PI / 2));
+          }
+        }
+
+        outerAtoms.forEach((el, idx) => {
+          const angle = angles[idx];
+          const ox = center + radiusDist * Math.cos(angle);
+          const oy = center + radiusDist * Math.sin(angle);
+          const pOuter = CPK[el] || { color: "#cbd5e1", radius: 7.5 };
+          const rOuter = pOuter.radius * scale;
+
+          bondsSVG += `<line x1="${center}" y1="${center}" x2="${ox}" y2="${oy}" stroke="#94a3b8" stroke-width="${3 * scale}" stroke-linecap="round"/>`;
+          outerSpheresSVG += `
+            <circle cx="${ox}" cy="${oy}" r="${rOuter}" fill="${pOuter.color}" stroke="#0f172a" stroke-width="1.2"/>
+            <circle cx="${ox - rOuter*0.25}" cy="${oy - rOuter*0.25}" r="${rOuter*0.3}" fill="#ffffff" opacity="0.35"/>
+          `;
+        });
+
+        const centralSphereSVG = `
+          <circle cx="${center}" cy="${center}" r="${rCentral}" fill="${pCentral.color}" stroke="#0f172a" stroke-width="1.2"/>
+          <circle cx="${center - rCentral*0.25}" cy="${center - rCentral*0.25}" r="${rCentral*0.3}" fill="#ffffff" opacity="0.35"/>
+        `;
+
+        svgContent = bondsSVG + centralSphereSVG + outerSpheresSVG;
+      }
+
+      return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+    }
+
+    function renderInventory() {
+      const grid = document.getElementById("inventory");
+      grid.innerHTML = "";
+
+      const filtered = inventory.filter(item => {
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return true;
+        return item.formula.toLowerCase().includes(query) || 
+               (item.display && item.display.toLowerCase().includes(query));
+      });
+
+      filtered.forEach(item => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          ${generateBallAndStickSVG(item, 50)}
+          <span class="formula">${item.display || toSubscript(item.formula)}</span>
+        `;
+        card.onpointerdown = (e) => startSidebarDrag(e, item);
+        grid.appendChild(card);
+      });
+      document.getElementById("count").innerText = inventory.length;
+    }
+
+    function filterInventory() {
+      searchQuery = document.getElementById("search-box").value;
+      renderInventory();
+    }
+
+    // Drag and Drop Mechanics
+    function startSidebarDrag(e, item) {
+      e.preventDefault();
+      const ghost = document.createElement("div");
+      ghost.className = "canvas-item drag-ghost";
+      ghost.innerHTML = `
+        ${generateBallAndStickSVG(item, 54)}
+        <span class="formula">${item.display || toSubscript(item.formula)}</span>
+      `;
+      document.body.appendChild(ghost);
+
+      activeDrag = { type: "sidebar", item: item, ghost: ghost };
+      moveGhost(e);
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    }
+
+    function startCanvasDrag(e, instance) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = instance.el.getBoundingClientRect();
+      activeDrag = {
+        type: "canvas",
+        instance: instance,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+      };
+
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    }
+
+    function moveGhost(e) {
+      if (activeDrag && activeDrag.ghost) {
+        activeDrag.ghost.style.left = `${e.clientX}px`;
+        activeDrag.ghost.style.top = `${e.clientY}px`;
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!activeDrag) return;
+
+      if (activeDrag.type === "sidebar") {
+        moveGhost(e);
+      } else if (activeDrag.type === "canvas") {
+        const workspace = document.getElementById("workspace");
+        const wRect = workspace.getBoundingClientRect();
+        
+        let x = e.clientX - wRect.left - activeDrag.offsetX;
+        let y = e.clientY - wRect.top - activeDrag.offsetY;
+
+        activeDrag.instance.x = x;
+        activeDrag.instance.y = y;
+        activeDrag.instance.el.style.left = `${x}px`;
+        activeDrag.instance.el.style.top = `${y}px`;
+
+        updateBoxVisualState();
+      }
+    }
+
+    function onPointerUp(e) {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+
+      if (!activeDrag) return;
+
+      const workspace = document.getElementById("workspace");
+      const sidebar = document.getElementById("sidebar");
+      const wRect = workspace.getBoundingClientRect();
+      const sRect = sidebar.getBoundingClientRect();
+
+      if (activeDrag.type === "sidebar") {
+        activeDrag.ghost.remove();
+
+        if (
+          e.clientX >= wRect.left && e.clientX <= wRect.right &&
+          e.clientY >= wRect.top && e.clientY <= wRect.bottom
+        ) {
+          const x = e.clientX - wRect.left - 35;
+          const y = e.clientY - wRect.top - 35;
+          spawnCanvasItem(activeDrag.item, x, y);
+        }
+      } else if (activeDrag.type === "canvas") {
+        const droppedInst = activeDrag.instance;
+
+        // Dragged back to sidebar -> Remove species
+        if (
+          e.clientX >= sRect.left && e.clientX <= sRect.right &&
+          e.clientY >= sRect.top && e.clientY <= sRect.bottom
+        ) {
+          removeCanvasItem(droppedInst);
+          document.getElementById("status-bar").innerText = "Species removed from board.";
+        } else {
+          updateBoxVisualState();
+        }
+      }
+
+      activeDrag = null;
+    }
+
+    function spawnCanvasItem(item, x, y) {
+      const instId = ++instanceIdCounter;
+      const el = document.createElement("div");
+      el.className = "canvas-item";
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        ${generateBallAndStickSVG(item, 52)}
+        <span class="formula">${item.display || toSubscript(item.formula)}</span>
+      `;
+
+      const inst = { id: instId, item, x, y, el };
+      el.onpointerdown = (e) => startCanvasDrag(e, inst);
+
+      document.getElementById("workspace").appendChild(el);
+      canvasInstances.push(inst);
+      updateBoxVisualState();
+      return inst;
+    }
+
+    function removeCanvasItem(inst) {
+      inst.el.remove();
+      canvasInstances = canvasInstances.filter(i => i.id !== inst.id);
+      updateBoxVisualState();
+    }
+
+    function clearCanvas() {
+      canvasInstances.forEach(i => i.el.remove());
+      canvasInstances = [];
+      updateBoxVisualState();
+      document.getElementById("status-bar").innerText = "Board cleared.";
+    }
+
+    // Reaction Box Detection
+    function getItemsInBox() {
+      const box = document.getElementById("reaction-box");
+      const bRect = box.getBoundingClientRect();
+
+      return canvasInstances.filter(inst => {
+        const r = inst.el.getBoundingClientRect();
+        const centerX = r.left + r.width / 2;
+        const centerY = r.top + r.height / 2;
+        return (
+          centerX >= bRect.left && centerX <= bRect.right &&
+          centerY >= bRect.top && centerY <= bRect.bottom
+        );
+      });
+    }
+
+    function updateBoxVisualState() {
+      const inBoxItems = getItemsInBox();
+      canvasInstances.forEach(inst => {
+        if (inBoxItems.some(i => i.id === inst.id)) {
+          inst.el.classList.add("in-box");
+        } else {
+          inst.el.classList.remove("in-box");
+        }
+      });
+    }
+
+    // Chemical Formula Parsing & Reaction Logic
+    function parseFormulaToAtoms(formula) {
+      const atoms = {};
+      const matches = formula.matchAll(/([A-Z][a-z]?)(\d*)/g);
+      for (const match of matches) {
+        if (match[1]) {
+          atoms[match[1]] = (atoms[match[1]] || 0) + (parseInt(match[2], 10) || 1);
+        }
+      }
+      return atoms;
+    }
+
+    function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+    function getDivisors(n) {
+      const divs = [];
+      for (let i = 1; i <= n; i++) {
+        if (n % i === 0) divs.push(i);
+      }
+      return divs;
+    }
+
+    async function fetchPubChemCandidates(boxAtoms) {
+      const counts = Object.values(boxAtoms);
+      const overallGcd = counts.reduce((acc, val) => gcd(acc, val), counts[0]);
+      const possibleFactors = getDivisors(overallGcd);
+
+      const candidatesMap = new Map();
+
+      for (const factor of possibleFactors) {
+        const targetAtoms = {};
+        let targetFormula = "";
+        
+        const elements = Object.keys(boxAtoms).sort((a, b) => {
+          if (a === 'C') return -1;
+          if (b === 'C') return 1;
+          if (a === 'H') return -1;
+          if (b === 'H') return 1;
+          return a.localeCompare(b);
+        });
+
+        elements.forEach(el => {
+          targetAtoms[el] = boxAtoms[el] / factor;
+          targetFormula += `${el}${targetAtoms[el] > 1 ? targetAtoms[el] : ''}`;
+        });
+
+        const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/${targetFormula}/property/Title,IUPACName,MolecularFormula,Charge,InChI/JSON`;
+        try {
+          const res = await fetch(url);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.PropertyTable && data.PropertyTable.Properties) {
+              data.PropertyTable.Properties.forEach(p => {
+                if (p.Charge !== 0 || !p.InChI) return;
+
+                const pAtoms = parseFormulaToAtoms(p.MolecularFormula);
+                const totalAtoms = Object.values(pAtoms).reduce((s, n) => s + n, 0);
+
+                if (totalAtoms === 1) {
+                  const symbol = Object.keys(pAtoms)[0];
+                  if (symbol !== "He" && symbol !== "Ne" && symbol !== "Ar") return;
+                }
+
+                // Verify exact stoichiometric match with box atoms
+                let valid = true;
+                let productCount = null;
+                for (let el in boxAtoms) {
+                  if (!pAtoms[el] || boxAtoms[el] % pAtoms[el] !== 0) {
+                    valid = false;
+                    break;
+                  }
+                  const k = boxAtoms[el] / pAtoms[el];
+                  if (productCount === null) productCount = k;
+                  else if (productCount !== k) {
+                    valid = false;
+                    break;
+                  }
+                }
+
+                if (valid && productCount >= 1) {
+                  if (!candidatesMap.has(p.CID)) {
+                    candidatesMap.set(p.CID, {
+                      cid: p.CID,
+                      formula: p.MolecularFormula,
+                      display: toSubscript(p.MolecularFormula),
+                      title: p.Title || p.IUPACName || p.MolecularFormula,
+                      atoms: pAtoms,
+                      inchi: p.InChI,
+                      productCount: productCount
+                    });
+                  }
+                }
+              });
+            }
+          }
+        } catch (e) {}
+      }
+
+      return Array.from(candidatesMap.values());
+    }
+
+    async function triggerBoxReaction() {
+      const statusEl = document.getElementById("status-bar");
+      const btn = document.getElementById("react-btn");
+      const itemsInBox = getItemsInBox();
+
+      if (itemsInBox.length < 2) {
+        statusEl.innerText = "Place at least 2 reactant species inside the Reaction Box.";
+        return;
+      }
+
+      btn.disabled = true;
+      statusEl.innerHTML = `<span class="loader"></span> Calculating reaction paths...`;
+
+      const containsNoble = itemsInBox.some(i => i.item.isNoble);
+      if (containsNoble && itemsInBox.length > 1) {
+        statusEl.innerText = "Reaction not accepted";
+        btn.disabled = false;
+        return;
+      }
+
+      const boxAtoms = {};
+      itemsInBox.forEach(inst => {
+        for (let el in inst.item.atoms) {
+          boxAtoms[el] = (boxAtoms[el] || 0) + inst.item.atoms[el];
+        }
+      });
+
+      const candidates = await fetchPubChemCandidates(boxAtoms);
+
+      if (candidates.length === 0) {
+        statusEl.innerText = "Reaction not accepted";
+        btn.disabled = false;
+      } else if (candidates.length === 1) {
+        executeReaction(candidates[0], itemsInBox);
+        btn.disabled = false;
+      } else {
+        // Prompt user to select from multiple stoichiometric reaction paths
+        promptMultipleProducts(candidates, itemsInBox);
+        btn.disabled = false;
+      }
+    }
+
+    function promptMultipleProducts(candidates, itemsInBox) {
+      const modal = document.getElementById("choice-modal");
+      const grid = document.getElementById("choice-grid");
+      grid.innerHTML = "";
+
+      candidates.forEach(cand => {
+        const card = document.createElement("div");
+        card.className = "choice-card";
+        card.innerHTML = `
+          <div style="display:flex; align-items:center; gap: 12px;">
+            ${generateBallAndStickSVG(cand, 44)}
+            <div class="choice-info">
+              <span class="choice-title">${cand.productCount > 1 ? cand.productCount + ' ' : ''}${cand.display}</span>
+              <span class="choice-sub">${cand.title}</span>
+            </div>
+          </div>
+          <span style="color:#38bdf8; font-weight:bold; font-size: 0.85rem;">Select &rarr;</span>
+        `;
+        card.onclick = () => {
+          modal.style.display = "none";
+          executeReaction(cand, itemsInBox);
+        };
+        grid.appendChild(card);
+      });
+
+      modal.style.display = "flex";
+    }
+
+    function executeReaction(selectedCandidate, itemsInBox) {
+      let productItem = inventory.find(i => i.inchi === selectedCandidate.inchi);
+
+      if (!productItem) {
+        productItem = {
+          id: `CID_${selectedCandidate.cid}`,
+          formula: selectedCandidate.formula,
+          display: selectedCandidate.display,
+          atoms: selectedCandidate.atoms,
+          cid: selectedCandidate.cid,
+          inchi: selectedCandidate.inchi
+        };
+        inventory.push(productItem);
+        renderInventory();
+      }
+
+      const box = document.getElementById("reaction-box");
+      const bRect = box.getBoundingClientRect();
+      const wRect = document.getElementById("workspace").getBoundingClientRect();
+
+      itemsInBox.forEach(inst => removeCanvasItem(inst));
+
+      const count = selectedCandidate.productCount;
+      for (let i = 0; i < count; i++) {
+        const spawnX = (bRect.left - wRect.left) + 40 + (i * 70) % (bRect.width - 80);
+        const spawnY = (bRect.top - wRect.top) + 60 + Math.floor((i * 70) / (bRect.width - 80)) * 60;
+        spawnCanvasItem(productItem, spawnX, spawnY);
+      }
+
+      const statusEl = document.getElementById("status-bar");
+      const pubchemUrl = `https://pubchem.ncbi.nlm.nih.gov/compound/${selectedCandidate.cid}`;
+      statusEl.innerHTML = `
+        Reaction Successful! Formed ${count > 1 ? count + ' ' : ''}${productItem.display}
+        (<a href="${pubchemUrl}" target="_blank" rel="noopener">View on PubChem</a>)
+      `;
+    }
+
+    // App Initialization
+    renderInventory();
+  </script>
+</body>
+</html>
