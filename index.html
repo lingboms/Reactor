@@ -24,9 +24,7 @@
     .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 80px; flex: 1 1 calc(50% - 8px); text-align: center; }
     .card:hover { background: #475569; border-color: #38bdf8; }
     .card .formula { font-weight: bold; font-size: 0.85rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
-
-    .svg-container { display: flex; align-items: center; justify-content: center; pointer-events: none; background: #ffffff; border-radius: 6px; padding: 2px; }
-    .svg-container svg { max-width: 100%; max-height: 100%; }
+    .card img.thumb-3d { width: 54px; height: 54px; object-fit: contain; pointer-events: none; border-radius: 4px; }
 
     .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 6px 8px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; }
     .canvas-item.in-box { border-color: #a855f7; }
@@ -88,8 +86,12 @@
     </div>
   </div>
 
+  <div id="offscreen-container" style="width:100px; height:100px; position:absolute; left:-9999px; top:-9999px;"></div>
+
   <script>
     let RDKitModule = null;
+    let offscreen3DViewer = null;
+    const thumbnailCache = new Map();
 
     const BASE_ELEMENTS = [
       { id: "H2", formula: "H2", display: "H₂", atoms: { H: 2 }, cid: 783, smiles: "[H][H]", inchi: "InChI=1S/H2/h1H" },
@@ -120,6 +122,7 @@
 
     window.initRDKitModule().then((RDKit) => {
       RDKitModule = RDKit;
+      offscreen3DViewer = $3Dmol.createViewer(document.getElementById("offscreen-container"), { backgroundColor: '#334155' });
       document.getElementById("status-bar").innerText = "Place items into Reaction Box and click React.";
       renderInventory();
     });
@@ -150,17 +153,43 @@
       return rawInchi || rawSmiles || item.formula;
     }
 
-    function get2DSVG(item, width = 50, height = 50) {
-      if (!RDKitModule) return `<div style="width:${width}px;height:${height}px;">${item.display}</div>`;
-      let mol = null;
-      if (item.smiles) mol = RDKitModule.get_mol(item.smiles);
-      if (!mol && item.inchi) mol = RDKitModule.get_mol(item.inchi);
+    async function fetch3DSDF(cid) {
+      try {
+        const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`);
+        if (res.ok) {
+          const sdf = await res.text();
+          if (sdf && sdf.length > 50) return sdf;
+        }
+      } catch (e) {}
+      return null;
+    }
 
-      if (!mol) return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;font-weight:bold;">${item.display}</div>`;
+    async function get3DThumbnail(item) {
+      const key = item.cid || item.id || item.formula;
+      if (thumbnailCache.has(key)) return thumbnailCache.get(key);
 
-      const svg = mol.get_svg_with_highlights(JSON.stringify({ width, height, clearBackground: true }));
-      mol.delete();
-      return `<div class="svg-container" style="width:${width}px;height:${height}px;">${svg}</div>`;
+      offscreen3DViewer.clear();
+      let sdfData = item.cid ? await fetch3DSDF(item.cid) : null;
+
+      if (sdfData) {
+        offscreen3DViewer.addModel(sdfData, "sdf");
+      } else {
+        const mol = RDKitModule && item.smiles ? RDKitModule.get_mol(item.smiles) : null;
+        if (mol) {
+          offscreen3DViewer.addModel(mol.get_molblock(), "mol");
+          mol.delete();
+        } else {
+          return null;
+        }
+      }
+
+      offscreen3DViewer.setStyle({}, { stick: { radius: 0.18, colorscheme: 'Jmol' }, sphere: { scale: 0.3, colorscheme: 'Jmol' } });
+      offscreen3DViewer.zoomTo();
+      offscreen3DViewer.render();
+
+      const imgData = offscreen3DViewer.pngURI();
+      thumbnailCache.set(key, imgData);
+      return imgData;
     }
 
     function renderInventory() {
@@ -175,11 +204,22 @@
       filtered.forEach(item => {
         const card = document.createElement("div");
         card.className = "card";
-        card.innerHTML = `
-          ${get2DSVG(item, 50, 50)}
-          <span class="formula">${item.display || toSubscript(item.formula)}</span>
-        `;
-        card.onpointerdown = (e) => startSidebarDrag(e, item);
+        
+        const img = document.createElement("img");
+        img.className = "thumb-3d";
+        img.alt = item.display;
+        
+        get3DThumbnail(item).then(dataUrl => {
+          if (dataUrl) img.src = dataUrl;
+        });
+
+        const label = document.createElement("span");
+        label.className = "formula";
+        label.innerText = item.display || toSubscript(item.formula);
+
+        card.appendChild(img);
+        card.appendChild(label);
+        card.onpointerdown = (e) => startSidebarDrag(e, item, img.src);
         grid.appendChild(card);
       });
       document.getElementById("count").innerText = inventory.length;
@@ -188,18 +228,6 @@
     function filterInventory() {
       searchQuery = document.getElementById("search-box").value;
       renderInventory();
-    }
-
-    // Fetch reliable 3D SDF data from PubChem CID or generated SDF
-    async function fetch3DSDF(cid) {
-      try {
-        const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`);
-        if (res.ok) {
-          const sdf = await res.text();
-          if (sdf && sdf.length > 50) return sdf;
-        }
-      } catch (e) {}
-      return null;
     }
 
     async function mount3DViewer(container, item) {
@@ -213,13 +241,11 @@
       if (sdfData) {
         viewer.addModel(sdfData, "sdf");
       } else {
-        // Fallback for simple elements missing 3D CID conformers
         const mol = RDKitModule && item.smiles ? RDKitModule.get_mol(item.smiles) : null;
         if (mol) {
           viewer.addModel(mol.get_molblock(), "mol");
           mol.delete();
         } else {
-          container.innerHTML = get2DSVG(item, 80, 80);
           return;
         }
       }
@@ -229,12 +255,12 @@
       viewer.render();
     }
 
-    function startSidebarDrag(e, item) {
+    function startSidebarDrag(e, item, imgSrc) {
       e.preventDefault();
       const ghost = document.createElement("div");
       ghost.className = "canvas-item drag-ghost";
       ghost.innerHTML = `
-        ${get2DSVG(item, 54, 54)}
+        <img src="${imgSrc || ''}" style="width:54px;height:54px;object-fit:contain;">
         <span class="formula">${item.display || toSubscript(item.formula)}</span>
       `;
       document.body.appendChild(ghost);
@@ -402,15 +428,6 @@
       return divs;
     }
 
-    async function hasSpectralData(cid) {
-      try {
-        const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON`);
-        if (!res.ok) return false;
-        const text = await res.text();
-        return /spectr/i.test(text);
-      } catch (e) { return false; }
-    }
-
     async function fetchPubChemCandidates(boxAtoms) {
       const counts = Object.values(boxAtoms);
       const overallGcd = counts.reduce((acc, val) => gcd(acc, val), counts[0]);
@@ -441,11 +458,16 @@
 
                 const pAtoms = parseFormulaToAtoms(p.MolecularFormula);
                 let valid = true, productCount = null;
+                
+                // Ensure formula contains exact required elements with no extra elements
                 for (let el in boxAtoms) {
                   if (!pAtoms[el] || boxAtoms[el] % pAtoms[el] !== 0) { valid = false; break; }
                   const k = boxAtoms[el] / pAtoms[el];
                   if (productCount === null) productCount = k;
                   else if (productCount !== k) { valid = false; break; }
+                }
+                for (let el in pAtoms) {
+                  if (!boxAtoms[el]) { valid = false; break; }
                 }
 
                 if (valid && productCount >= 1) {
@@ -468,10 +490,7 @@
         } catch (e) {}
       }
 
-      const spectralCheckResults = await Promise.all(
-        Array.from(rawCandidatesMap.values()).map(async (cand) => (await hasSpectralData(cand.cid)) ? cand : null)
-      );
-      return spectralCheckResults.filter(Boolean);
+      return Array.from(rawCandidatesMap.values());
     }
 
     async function triggerBoxReaction() {
@@ -518,16 +537,20 @@
       candidates.forEach(cand => {
         const card = document.createElement("div");
         card.className = "choice-card";
-        card.innerHTML = `
-          <div style="display:flex; align-items:center; gap: 12px;">
-            ${get2DSVG(cand, 44, 44)}
-            <div style="display:flex;flex-direction:column;align-items:flex-start;">
-              <span style="font-weight:bold;color:#f8fafc;">${cand.display}</span>
-              <span style="font-size:0.78rem;color:#94a3b8;">${cand.title}</span>
+        
+        get3DThumbnail(cand).then(dataUrl => {
+          card.innerHTML = `
+            <div style="display:flex; align-items:center; gap: 12px;">
+              <img src="${dataUrl || ''}" style="width:44px;height:44px;object-fit:contain;">
+              <div style="display:flex;flex-direction:column;align-items:flex-start;">
+                <span style="font-weight:bold;color:#f8fafc;">${cand.display}</span>
+                <span style="font-size:0.78rem;color:#94a3b8;">${cand.title}</span>
+              </div>
             </div>
-          </div>
-          <span style="color:#38bdf8; font-weight:bold; font-size:0.85rem;">Select &rarr;</span>
-        `;
+            <span style="color:#38bdf8; font-weight:bold; font-size:0.85rem;">Select &rarr;</span>
+          `;
+        });
+
         card.onclick = () => {
           modal.style.display = "none";
           executeReaction(cand, itemsInBox);
