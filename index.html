@@ -3,52 +3,67 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Molecule_Game</title>
-  <!-- jQuery & 3Dmol.js -->
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+  <title>Game</title>
+  <!-- Load RDKit.js Minimal WebAssembly Build -->
   <script src="https://unpkg.com/@rdkit/rdkit/Code/MinimalLib/dist/RDKit_minimal.js"></script>
-
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { display: flex; margin: 0; height: 100vh; background: #0f172a; color: #f8fafc; overflow: hidden; user-select: none; }
     
-    #sidebar { width: 290px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; z-index: 10; }
+    /* Layout */
+    #sidebar { width: 280px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; display: flex; flex-direction: column; z-index: 10; }
     #workspace { flex: 1; position: relative; background: #0f172a; overflow: hidden; }
 
     h2 { margin-top: 0; color: #38bdf8; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    #search-box { width: 100%; background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 8px 12px; color: #f8fafc; font-size: 0.85rem; margin-bottom: 12px; outline: none; }
+    
+    /* Search Bar */
+    #search-box { width: 100%; background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 8px 12px; color: #f8fafc; font-size: 0.85rem; margin-bottom: 12px; outline: none; transition: border-color 0.15s; }
     #search-box:focus { border-color: #38bdf8; }
 
+    /* Inventory Sidebar */
     .inventory-grid { display: flex; flex-wrap: wrap; gap: 8px; overflow-y: auto; flex: 1; align-content: flex-start; width: 100%; padding-right: 4px; }
-    .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 8px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 80px; flex: 1 1 calc(50% - 8px); text-align: center; }
+    .card { background: #334155; border: 1px solid #475569; border-radius: 8px; padding: 10px 6px; cursor: grab; display: flex; flex-direction: column; align-items: center; min-width: 75px; flex: 1 1 calc(50% - 8px); text-align: center; transition: background 0.15s, border-color 0.15s; }
     .card:hover { background: #475569; border-color: #38bdf8; }
-    .card .formula { font-weight: bold; font-size: 0.85rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
-    .card img.thumb-3d { width: 54px; height: 54px; object-fit: contain; pointer-events: none; border-radius: 4px; }
+    .card .formula { font-weight: bold; font-size: 0.9rem; color: #f1f5f9; margin-top: 4px; pointer-events: none; }
 
-    .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 6px 8px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; }
+    /* RDKit SVG Containers */
+    .svg-container { display: flex; align-items: center; justify-content: center; pointer-events: none; background: #ffffff; border-radius: 6px; padding: 2px; }
+    .svg-container svg { max-width: 100%; max-height: 100%; }
+
+    /* Canvas Workspace Elements */
+    .canvas-item { position: absolute; background: #1e293b; border: 2px solid #38bdf8; border-radius: 12px; padding: 8px 10px; cursor: move; display: flex; flex-direction: column; align-items: center; box-shadow: 0 4px 12px rgba(0,0,0,0.4); touch-action: none; transition: border-color 0.15s, box-shadow 0.15s; }
+    .canvas-item:hover { box-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
     .canvas-item.in-box { border-color: #a855f7; }
-    .canvas-item .formula { font-weight: bold; font-size: 0.9rem; color: #ffffff; margin-top: 4px; pointer-events: none; }
-    .canvas-item .mol-viewer-box { width: 90px; height: 90px; border-radius: 6px; overflow: hidden; background: #0f172a; position: relative; }
+    .canvas-item .formula { font-weight: bold; font-size: 0.95rem; color: #ffffff; margin-top: 4px; pointer-events: none; }
 
-    #reaction-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 440px; height: 320px; border: 2.5px dashed #a855f7; border-radius: 16px; background: rgba(168, 85, 247, 0.04); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px; pointer-events: none; }
+    /* Reaction Box Overlay */
+    #reaction-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; height: 300px; border: 2.5px dashed #a855f7; border-radius: 16px; background: rgba(168, 85, 247, 0.04); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px; pointer-events: none; box-shadow: inset 0 0 20px rgba(168, 85, 247, 0.08); }
     .box-header { display: flex; width: 100%; justify-content: space-between; align-items: center; pointer-events: auto; }
     .box-title { color: #c084fc; font-weight: bold; font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase; }
-    #react-btn { background: #9333ea; color: white; border: none; padding: 8px 22px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; pointer-events: auto; }
-    #react-btn:hover { background: #7e22ce; }
-    #react-btn:disabled { background: #475569; cursor: not-allowed; }
+    #react-btn { background: #9333ea; color: white; border: none; padding: 8px 22px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor: pointer; pointer-events: auto; transition: background 0.2s, transform 0.1s; box-shadow: 0 2px 8px rgba(147, 51, 234, 0.4); }
+    #react-btn:hover { background: #7e22ce; transform: scale(1.03); }
+    #react-btn:disabled { background: #475569; cursor: not-allowed; box-shadow: none; }
 
+    /* Drag Ghost */
     .drag-ghost { position: absolute; pointer-events: none; z-index: 1000; opacity: 0.9; transform: translate(-50%, -50%); }
 
-    #status-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; padding: 12px 24px; border-radius: 20px; color: #38bdf8; font-weight: 500; font-size: 0.9rem; z-index: 5; text-align: center; max-width: 80%; }
+    /* Status Bar & Board Controls */
+    #status-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; padding: 12px 24px; border-radius: 20px; color: #38bdf8; font-weight: 500; font-size: 0.9rem; pointer-events: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 5; text-align: center; max-width: 80%; }
     #status-bar a { color: #38bdf8; font-weight: bold; text-decoration: underline; margin-left: 6px; }
     #clear-canvas-btn { position: absolute; top: 16px; right: 16px; background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; cursor: pointer; z-index: 5; }
+    #clear-canvas-btn:hover { background: #dc2626; }
 
+    /* Multiple Product Choice Modal */
     #choice-modal { display: none; position: absolute; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
-    .modal-content { background: #1e293b; border: 1px solid #475569; border-radius: 16px; padding: 20px; width: 460px; max-width: 90%; text-align: center; }
-    .choice-grid { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px; }
-    .choice-card { background: #334155; border: 1px solid #475569; border-radius: 10px; padding: 8px 12px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+    .modal-content { background: #1e293b; border: 1px solid #475569; border-radius: 16px; padding: 20px; width: 440px; max-width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    .modal-content h3 { color: #38bdf8; margin-top: 0; margin-bottom: 6px; font-size: 1.1rem; }
+    .modal-content p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+    .choice-grid { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; padding-right: 4px; }
+    .choice-card { background: #334155; border: 1px solid #475569; border-radius: 10px; padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: background 0.15s, border-color 0.15s; }
     .choice-card:hover { background: #475569; border-color: #38bdf8; }
+    .choice-info { display: flex; flex-direction: column; align-items: flex-start; }
+    .choice-title { font-weight: bold; color: #f8fafc; font-size: 0.95rem; }
+    .choice-sub { font-size: 0.78rem; color: #94a3b8; }
 
     .loader { border: 2.5px solid #334155; border-top: 2.5px solid #38bdf8; border-radius: 50%; width: 14px; height: 14px; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -56,18 +71,21 @@
 </head>
 <body>
 
+  <!-- Sidebar: Inventory -->
   <div id="sidebar">
     <h2>Lingbom's Game</h2>
     <p style="font-size: 0.72rem; color: #94a3b8; margin-top: -4px; margin-bottom: 10px;">
-      Inventory (<span id="count">0</span>) • Drag elements to board.
+      Inventory (<span id="count">0</span>) • Drag to board or back to remove.
     </p>
     <input type="text" id="search-box" placeholder="Search species..." oninput="filterInventory()">
     <div class="inventory-grid" id="inventory"></div>
   </div>
 
+  <!-- Workspace Canvas -->
   <div id="workspace">
     <button id="clear-canvas-btn" onclick="clearCanvas()">Clear Board</button>
 
+    <!-- Reaction Box Overlay -->
     <div id="reaction-box">
       <div class="box-header">
         <span class="box-title">⚡ Reaction Box</span>
@@ -75,27 +93,28 @@
       </div>
     </div>
 
-    <div id="status-bar">Initializing RDKit & 3Dmol WebGL engines...</div>
+    <div id="status-bar">Initializing RDKit chem engine...</div>
 
+    <!-- Choice Selection Modal for Multiple Products -->
     <div id="choice-modal">
       <div class="modal-content">
-        <h3 style="color:#38bdf8;margin-top:0;">Multiple Reaction Paths</h3>
-        <p style="font-size:0.85rem;color:#94a3b8;">Select product path to form:</p>
+        <h3>Multiple Reaction Paths</h3>
+        <p>Choose which product path to form from reactants:</p>
         <div class="choice-grid" id="choice-grid"></div>
       </div>
     </div>
   </div>
 
-  <div id="offscreen-container" style="width:100px; height:100px; position:absolute; left:-9999px; top:-9999px;"></div>
-
   <script>
     let RDKitModule = null;
-    let offscreen3DViewer = null;
-    const thumbnailCache = new Map();
 
+    // Base Elements with SMILES & InChI representations
     const BASE_ELEMENTS = [
+      // Period 1
       { id: "H2", formula: "H2", display: "H₂", atoms: { H: 2 }, cid: 783, smiles: "[H][H]", inchi: "InChI=1S/H2/h1H" },
       { id: "He", formula: "He", display: "He", atoms: { He: 1 }, cid: 23963, smiles: "[He]", inchi: "InChI=1S/He", isNoble: true },
+      
+      // Period 2
       { id: "Li", formula: "Li", display: "Li", atoms: { Li: 1 }, cid: 23993, smiles: "[Li]", inchi: "InChI=1S/Li", isMetal: true },
       { id: "Be", formula: "Be", display: "Be", atoms: { Be: 1 }, cid: 5460467, smiles: "[Be]", inchi: "InChI=1S/Be", isMetal: true },
       { id: "B", formula: "B", display: "B", atoms: { B: 1 }, cid: 5462311, smiles: "[B]", inchi: "InChI=1S/B" },
@@ -104,6 +123,8 @@
       { id: "O2", formula: "O2", display: "O₂", atoms: { O: 2 }, cid: 977, smiles: "O=O", inchi: "InChI=1S/O2/c1-2" },
       { id: "F2", formula: "F2", display: "F₂", atoms: { F: 2 }, cid: 24524, smiles: "FF", inchi: "InChI=1S/F2/c1-2" },
       { id: "Ne", formula: "Ne", display: "Ne", atoms: { Ne: 1 }, cid: 23968, smiles: "[Ne]", inchi: "InChI=1S/Ne", isNoble: true },
+
+      // Period 3
       { id: "Na", formula: "Na", display: "Na", atoms: { Na: 1 }, cid: 5360545, smiles: "[Na]", inchi: "InChI=1S/Na", isMetal: true },
       { id: "Mg", formula: "Mg", display: "Mg", atoms: { Mg: 1 }, cid: 5462224, smiles: "[Mg]", inchi: "InChI=1S/Mg", isMetal: true },
       { id: "Al", formula: "Al", display: "Al", atoms: { Al: 1 }, cid: 5359268, smiles: "[Al]", inchi: "InChI=1S/Al", isMetal: true },
@@ -120,11 +141,13 @@
     let activeDrag = null;
     let searchQuery = "";
 
+    // Initialize RDKit WASM Engine
     window.initRDKitModule().then((RDKit) => {
       RDKitModule = RDKit;
-      offscreen3DViewer = $3Dmol.createViewer(document.getElementById("offscreen-container"), { backgroundColor: '#334155' });
-      document.getElementById("status-bar").innerText = "Place items into Reaction Box and click React.";
+      document.getElementById("status-bar").innerText = "Place elements inside the Reaction Box and press React.";
       renderInventory();
+    }).catch(() => {
+      document.getElementById("status-bar").innerText = "Failed to initialize RDKit Engine.";
     });
 
     function toSubscript(str) {
@@ -132,64 +155,35 @@
       return str.replace(/\d/g, m => map[m]);
     }
 
-    function getCanonicalSmiles(item) {
-      if (!item) return "";
-      const rawSmiles = item.smiles ? item.smiles.trim() : "";
-      const rawInchi = item.inchi ? item.inchi.trim() : "";
-
-      if (RDKitModule) {
-        let mol = null;
-        if (rawSmiles) mol = RDKitModule.get_mol(rawSmiles);
-        if (!mol && rawInchi) mol = RDKitModule.get_mol(rawInchi);
-
-        if (mol) {
-          try {
-            const canon = mol.get_smiles();
-            mol.delete();
-            if (canon && canon.trim() !== "") return canon.trim();
-          } catch (e) { mol.delete(); }
-        }
-      }
-      return rawInchi || rawSmiles || item.formula;
+    // Helper to generate canonical structure identifier for strict deduplication
+    function getStructureKey(item) {
+      if (item.inchi && item.inchi.trim() !== "") return item.inchi.trim();
+      if (item.smiles && item.smiles.trim() !== "") return item.smiles.trim();
+      return item.formula;
     }
 
-    async function fetch3DSDF(cid) {
-      try {
-        const res = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/SDF?record_type=3d`);
-        if (res.ok) {
-          const sdf = await res.text();
-          if (sdf && sdf.length > 50) return sdf;
-        }
-      } catch (e) {}
-      return null;
-    }
+    // Client-side SVG generation via RDKit WebAssembly
+    function getRDKitSVG(item, width = 50, height = 50) {
+      if (!RDKitModule) return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;"><span class="loader"></span></div>`;
+      
+      let mol = null;
+      if (item.smiles) mol = RDKitModule.get_mol(item.smiles);
+      if (!mol && item.inchi) mol = RDKitModule.get_mol(item.inchi);
 
-    async function get3DThumbnail(item) {
-      const key = item.cid || item.id || item.formula;
-      if (thumbnailCache.has(key)) return thumbnailCache.get(key);
-
-      offscreen3DViewer.clear();
-      let sdfData = item.cid ? await fetch3DSDF(item.cid) : null;
-
-      if (sdfData) {
-        offscreen3DViewer.addModel(sdfData, "sdf");
-      } else {
-        const mol = RDKitModule && item.smiles ? RDKitModule.get_mol(item.smiles) : null;
-        if (mol) {
-          offscreen3DViewer.addModel(mol.get_molblock(), "mol");
-          mol.delete();
-        } else {
-          return null;
-        }
+      if (!mol) {
+        return `<div style="width:${width}px;height:${height}px;display:flex;align-items:center;justify-content:center;font-weight:bold;color:#1e293b;">${item.display || item.formula}</div>`;
       }
 
-      offscreen3DViewer.setStyle({}, { stick: { radius: 0.18, colorscheme: 'Jmol' }, sphere: { scale: 0.3, colorscheme: 'Jmol' } });
-      offscreen3DViewer.zoomTo();
-      offscreen3DViewer.render();
+      const drawDetails = JSON.stringify({
+        width: width,
+        height: height,
+        clearBackground: true
+      });
 
-      const imgData = offscreen3DViewer.pngURI();
-      thumbnailCache.set(key, imgData);
-      return imgData;
+      const svg = mol.get_svg_with_highlights(drawDetails);
+      mol.delete();
+
+      return `<div class="svg-container" style="width:${width}px;height:${height}px;">${svg}</div>`;
     }
 
     function renderInventory() {
@@ -197,29 +191,20 @@
       grid.innerHTML = "";
 
       const filtered = inventory.filter(item => {
-        const q = searchQuery.toLowerCase().trim();
-        return !q || item.formula.toLowerCase().includes(q) || (item.display && item.display.toLowerCase().includes(q));
+        const query = searchQuery.toLowerCase().trim();
+        if (!query) return true;
+        return item.formula.toLowerCase().includes(query) || 
+               (item.display && item.display.toLowerCase().includes(query));
       });
 
       filtered.forEach(item => {
         const card = document.createElement("div");
         card.className = "card";
-        
-        const img = document.createElement("img");
-        img.className = "thumb-3d";
-        img.alt = item.display;
-        
-        get3DThumbnail(item).then(dataUrl => {
-          if (dataUrl) img.src = dataUrl;
-        });
-
-        const label = document.createElement("span");
-        label.className = "formula";
-        label.innerText = item.display || toSubscript(item.formula);
-
-        card.appendChild(img);
-        card.appendChild(label);
-        card.onpointerdown = (e) => startSidebarDrag(e, item, img.src);
+        card.innerHTML = `
+          ${getRDKitSVG(item, 50, 50)}
+          <span class="formula">${item.display || toSubscript(item.formula)}</span>
+        `;
+        card.onpointerdown = (e) => startSidebarDrag(e, item);
         grid.appendChild(card);
       });
       document.getElementById("count").innerText = inventory.length;
@@ -230,42 +215,18 @@
       renderInventory();
     }
 
-    async function mount3DViewer(container, item) {
-      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;"><span class="loader"></span></div>`;
-      
-      let sdfData = item.cid ? await fetch3DSDF(item.cid) : null;
-      container.innerHTML = "";
-
-      const viewer = $3Dmol.createViewer(container, { backgroundColor: '#0f172a' });
-
-      if (sdfData) {
-        viewer.addModel(sdfData, "sdf");
-      } else {
-        const mol = RDKitModule && item.smiles ? RDKitModule.get_mol(item.smiles) : null;
-        if (mol) {
-          viewer.addModel(mol.get_molblock(), "mol");
-          mol.delete();
-        } else {
-          return;
-        }
-      }
-
-      viewer.setStyle({}, { stick: { radius: 0.16, colorscheme: 'Jmol' }, sphere: { scale: 0.28, colorscheme: 'Jmol' } });
-      viewer.zoomTo();
-      viewer.render();
-    }
-
-    function startSidebarDrag(e, item, imgSrc) {
+    // Drag and Drop Mechanics
+    function startSidebarDrag(e, item) {
       e.preventDefault();
       const ghost = document.createElement("div");
       ghost.className = "canvas-item drag-ghost";
       ghost.innerHTML = `
-        <img src="${imgSrc || ''}" style="width:54px;height:54px;object-fit:contain;">
+        ${getRDKitSVG(item, 54, 54)}
         <span class="formula">${item.display || toSubscript(item.formula)}</span>
       `;
       document.body.appendChild(ghost);
 
-      activeDrag = { type: "sidebar", item, ghost };
+      activeDrag = { type: "sidebar", item: item, ghost: ghost };
       moveGhost(e);
 
       window.addEventListener("pointermove", onPointerMove);
@@ -279,7 +240,7 @@
       const rect = instance.el.getBoundingClientRect();
       activeDrag = {
         type: "canvas",
-        instance,
+        instance: instance,
         offsetX: e.clientX - rect.left,
         offsetY: e.clientY - rect.top,
       };
@@ -334,14 +295,19 @@
           e.clientX >= wRect.left && e.clientX <= wRect.right &&
           e.clientY >= wRect.top && e.clientY <= wRect.bottom
         ) {
-          spawnCanvasItem(activeDrag.item, e.clientX - wRect.left - 45, e.clientY - wRect.top - 45);
+          const x = e.clientX - wRect.left - 35;
+          const y = e.clientY - wRect.top - 35;
+          spawnCanvasItem(activeDrag.item, x, y);
         }
       } else if (activeDrag.type === "canvas") {
+        const droppedInst = activeDrag.instance;
+
         if (
           e.clientX >= sRect.left && e.clientX <= sRect.right &&
           e.clientY >= sRect.top && e.clientY <= sRect.bottom
         ) {
-          removeCanvasItem(activeDrag.instance);
+          removeCanvasItem(droppedInst);
+          document.getElementById("status-bar").innerText = "Species removed from board.";
         } else {
           updateBoxVisualState();
         }
@@ -356,24 +322,16 @@
       el.className = "canvas-item";
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
-
-      const viewerBox = document.createElement("div");
-      viewerBox.className = "mol-viewer-box";
-
-      const label = document.createElement("span");
-      label.className = "formula";
-      label.innerText = item.display || toSubscript(item.formula);
-
-      el.appendChild(viewerBox);
-      el.appendChild(label);
+      el.innerHTML = `
+        ${getRDKitSVG(item, 52, 52)}
+        <span class="formula">${item.display || toSubscript(item.formula)}</span>
+      `;
 
       const inst = { id: instId, item, x, y, el };
       el.onpointerdown = (e) => startCanvasDrag(e, inst);
 
       document.getElementById("workspace").appendChild(el);
       canvasInstances.push(inst);
-
-      mount3DViewer(viewerBox, item);
       updateBoxVisualState();
       return inst;
     }
@@ -388,8 +346,10 @@
       canvasInstances.forEach(i => i.el.remove());
       canvasInstances = [];
       updateBoxVisualState();
+      document.getElementById("status-bar").innerText = "Board cleared.";
     }
 
+    // Reaction Box Detection
     function getItemsInBox() {
       const box = document.getElementById("reaction-box");
       const bRect = box.getBoundingClientRect();
@@ -398,7 +358,10 @@
         const r = inst.el.getBoundingClientRect();
         const centerX = r.left + r.width / 2;
         const centerY = r.top + r.height / 2;
-        return (centerX >= bRect.left && centerX <= bRect.right && centerY >= bRect.top && centerY <= bRect.bottom);
+        return (
+          centerX >= bRect.left && centerX <= bRect.right &&
+          centerY >= bRect.top && centerY <= bRect.bottom
+        );
       });
     }
 
@@ -413,18 +376,25 @@
       });
     }
 
+    // Chemical Formula Parsing & Reaction Logic
     function parseFormulaToAtoms(formula) {
       const atoms = {};
-      for (const match of formula.matchAll(/([A-Z][a-z]?)(\d*)/g)) {
-        if (match[1]) atoms[match[1]] = (atoms[match[1]] || 0) + (parseInt(match[2], 10) || 1);
+      const matches = formula.matchAll(/([A-Z][a-z]?)(\d*)/g);
+      for (const match of matches) {
+        if (match[1]) {
+          atoms[match[1]] = (atoms[match[1]] || 0) + (parseInt(match[2], 10) || 1);
+        }
       }
       return atoms;
     }
 
     function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
     function getDivisors(n) {
       const divs = [];
-      for (let i = 1; i <= n; i++) if (n % i === 0) divs.push(i);
+      for (let i = 1; i <= n; i++) {
+        if (n % i === 0) divs.push(i);
+      }
       return divs;
     }
 
@@ -432,19 +402,25 @@
       const counts = Object.values(boxAtoms);
       const overallGcd = counts.reduce((acc, val) => gcd(acc, val), counts[0]);
       const possibleFactors = getDivisors(overallGcd);
-      const rawCandidatesMap = new Map();
+
+      // Unique map keyed strictly by structural InChI/SMILES
+      const candidatesMap = new Map();
 
       for (const factor of possibleFactors) {
+        const targetAtoms = {};
         let targetFormula = "";
+        
         const elements = Object.keys(boxAtoms).sort((a, b) => {
-          if (a === 'C') return -1; if (b === 'C') return 1;
-          if (a === 'H') return -1; if (b === 'H') return 1;
+          if (a === 'C') return -1;
+          if (b === 'C') return 1;
+          if (a === 'H') return -1;
+          if (b === 'H') return 1;
           return a.localeCompare(b);
         });
 
         elements.forEach(el => {
-          const cnt = boxAtoms[el] / factor;
-          targetFormula += `${el}${cnt > 1 ? cnt : ''}`;
+          targetAtoms[el] = boxAtoms[el] / factor;
+          targetFormula += `${el}${targetAtoms[el] > 1 ? targetAtoms[el] : ''}`;
         });
 
         const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/fastformula/${targetFormula}/property/Title,IUPACName,MolecularFormula,Charge,InChI,CanonicalSMILES/JSON`;
@@ -454,35 +430,50 @@
             const data = await res.json();
             if (data.PropertyTable && data.PropertyTable.Properties) {
               data.PropertyTable.Properties.forEach(p => {
-                if (p.Charge !== 0 || !p.InChI || !p.CanonicalSMILES) return;
+                if (p.Charge !== 0 || (!p.InChI && !p.CanonicalSMILES)) return;
 
                 const pAtoms = parseFormulaToAtoms(p.MolecularFormula);
-                let valid = true, productCount = null;
-                
-                // Ensure formula contains exact required elements with no extra elements
+                const totalAtoms = Object.values(pAtoms).reduce((s, n) => s + n, 0);
+
+                if (totalAtoms === 1) {
+                  const symbol = Object.keys(pAtoms)[0];
+                  if (symbol !== "He" && symbol !== "Ne" && symbol !== "Ar") return;
+                }
+
+                // Verify exact stoichiometric match with box atoms
+                let valid = true;
+                let productCount = null;
                 for (let el in boxAtoms) {
-                  if (!pAtoms[el] || boxAtoms[el] % pAtoms[el] !== 0) { valid = false; break; }
+                  if (!pAtoms[el] || boxAtoms[el] % pAtoms[el] !== 0) {
+                    valid = false;
+                    break;
+                  }
                   const k = boxAtoms[el] / pAtoms[el];
                   if (productCount === null) productCount = k;
-                  else if (productCount !== k) { valid = false; break; }
-                }
-                for (let el in pAtoms) {
-                  if (!boxAtoms[el]) { valid = false; break; }
+                  else if (productCount !== k) {
+                    valid = false;
+                    break;
+                  }
                 }
 
                 if (valid && productCount >= 1) {
-                  const candObj = {
+                  const itemCandidate = {
                     cid: p.CID,
                     formula: p.MolecularFormula,
                     display: toSubscript(p.MolecularFormula),
                     title: p.Title || p.IUPACName || p.MolecularFormula,
                     atoms: pAtoms,
-                    inchi: p.InChI.trim(),
-                    smiles: p.CanonicalSMILES.trim(),
+                    inchi: p.InChI ? p.InChI.trim() : "",
+                    smiles: p.CanonicalSMILES ? p.CanonicalSMILES.trim() : "",
                     productCount: productCount
                   };
-                  const key = getCanonicalSmiles(candObj);
-                  if (!rawCandidatesMap.has(key)) rawCandidatesMap.set(key, candObj);
+
+                  const uniqueKey = getStructureKey(itemCandidate);
+
+                  // Strict deduplication: keep only one candidate per chemical structure
+                  if (!candidatesMap.has(uniqueKey)) {
+                    candidatesMap.set(uniqueKey, itemCandidate);
+                  }
                 }
               });
             }
@@ -490,7 +481,7 @@
         } catch (e) {}
       }
 
-      return Array.from(rawCandidatesMap.values());
+      return Array.from(candidatesMap.values());
     }
 
     async function triggerBoxReaction() {
@@ -506,7 +497,8 @@
       btn.disabled = true;
       statusEl.innerHTML = `<span class="loader"></span> Calculating reaction paths...`;
 
-      if (itemsInBox.some(i => i.item.isNoble)) {
+      const containsNoble = itemsInBox.some(i => i.item.isNoble);
+      if (containsNoble && itemsInBox.length > 1) {
         statusEl.innerText = "Reaction not accepted";
         btn.disabled = false;
         return;
@@ -514,19 +506,23 @@
 
       const boxAtoms = {};
       itemsInBox.forEach(inst => {
-        for (let el in inst.item.atoms) boxAtoms[el] = (boxAtoms[el] || 0) + inst.item.atoms[el];
+        for (let el in inst.item.atoms) {
+          boxAtoms[el] = (boxAtoms[el] || 0) + inst.item.atoms[el];
+        }
       });
 
       const candidates = await fetchPubChemCandidates(boxAtoms);
 
       if (candidates.length === 0) {
         statusEl.innerText = "Reaction not accepted";
+        btn.disabled = false;
       } else if (candidates.length === 1) {
         executeReaction(candidates[0], itemsInBox);
+        btn.disabled = false;
       } else {
         promptMultipleProducts(candidates, itemsInBox);
+        btn.disabled = false;
       }
-      btn.disabled = false;
     }
 
     function promptMultipleProducts(candidates, itemsInBox) {
@@ -537,32 +533,32 @@
       candidates.forEach(cand => {
         const card = document.createElement("div");
         card.className = "choice-card";
-        
-        get3DThumbnail(cand).then(dataUrl => {
-          card.innerHTML = `
-            <div style="display:flex; align-items:center; gap: 12px;">
-              <img src="${dataUrl || ''}" style="width:44px;height:44px;object-fit:contain;">
-              <div style="display:flex;flex-direction:column;align-items:flex-start;">
-                <span style="font-weight:bold;color:#f8fafc;">${cand.display}</span>
-                <span style="font-size:0.78rem;color:#94a3b8;">${cand.title}</span>
-              </div>
+        // Show ONLY the pure chemical species without stoichiometry multipliers
+        card.innerHTML = `
+          <div style="display:flex; align-items:center; gap: 12px;">
+            ${getRDKitSVG(cand, 44, 44)}
+            <div class="choice-info">
+              <span class="choice-title">${cand.display}</span>
+              <span class="choice-sub">${cand.title}</span>
             </div>
-            <span style="color:#38bdf8; font-weight:bold; font-size:0.85rem;">Select &rarr;</span>
-          `;
-        });
-
+          </div>
+          <span style="color:#38bdf8; font-weight:bold; font-size: 0.85rem;">Select &rarr;</span>
+        `;
         card.onclick = () => {
           modal.style.display = "none";
           executeReaction(cand, itemsInBox);
         };
         grid.appendChild(card);
       });
+
       modal.style.display = "flex";
     }
 
     function executeReaction(selectedCandidate, itemsInBox) {
-      const key = getCanonicalSmiles(selectedCandidate);
-      let productItem = inventory.find(i => getCanonicalSmiles(i) === key);
+      const candidateKey = getStructureKey(selectedCandidate);
+      
+      // Check inventory using InChI/SMILES unique key
+      let productItem = inventory.find(i => getStructureKey(i) === candidateKey);
 
       if (!productItem) {
         productItem = {
@@ -584,6 +580,7 @@
 
       itemsInBox.forEach(inst => removeCanvasItem(inst));
 
+      // Show stoichiometry ONLY when placing multiple copies into the reaction box board
       const count = selectedCandidate.productCount;
       for (let i = 0; i < count; i++) {
         const spawnX = (bRect.left - wRect.left) + 40 + (i * 70) % (bRect.width - 80);
@@ -591,12 +588,16 @@
         spawnCanvasItem(productItem, spawnX, spawnY);
       }
 
+      const statusEl = document.getElementById("status-bar");
       const pubchemUrl = `https://pubchem.ncbi.nlm.nih.gov/compound/${selectedCandidate.cid}`;
-      document.getElementById("status-bar").innerHTML = `
+      statusEl.innerHTML = `
         Reaction Successful! Formed ${count > 1 ? count + ' ' : ''}${productItem.display}
         (<a href="${pubchemUrl}" target="_blank" rel="noopener">View on PubChem</a>)
       `;
     }
+
+    // Initial Inventory Render
+    renderInventory();
   </script>
 </body>
 </html>
